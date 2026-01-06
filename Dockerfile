@@ -1,44 +1,49 @@
-# Base image có PHP + Apache
 FROM php:8.2-apache
 
-# Cài các extension Laravel cần
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
     libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
     libonig-dev \
     libxml2-dev \
     zip \
-    unzip \
-    git \
     curl \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
 
-# Bật rewrite cho Laravel
+# Enable Apache rewrite
 RUN a2enmod rewrite
 
-# Set thư mục làm việc
+# Set working directory
 WORKDIR /var/www/html
 
-# Copy source code vào container
-COPY . .
+# Copy source code
+COPY . /var/www/html
 
-# Cài Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Cài thư viện PHP
+# Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Set quyền cho storage & cache
-RUN chown -R www-data:www-data \
-    /var/www/html/storage \
-    /var/www/html/bootstrap/cache
+# Create required Laravel directories
+RUN mkdir -p storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    bootstrap/cache
 
-# Set Apache document root trỏ vào public
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+# Set permissions
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
-RUN sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-    /etc/apache2/sites-available/*.conf \
-    /etc/apache2/apache2.conf \
-    /etc/apache2/conf-available/*.conf
+# Set Apache document root to public
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/*.conf \
+    && sed -ri 's!/var/www/!/var/www/html/public!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# Mở cổng 80
 EXPOSE 80
+
+CMD ["apache2-foreground"]

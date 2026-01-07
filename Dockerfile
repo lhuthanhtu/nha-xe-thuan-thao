@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
 # 2. Enable Apache rewrite
 # ===============================
 RUN a2enmod rewrite
+# ⭐ QUAN TRỌNG: cho phép .htaccess
+RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
 
 # ===============================
 # 3. Set working directory

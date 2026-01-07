@@ -1,49 +1,32 @@
 FROM php:8.2-apache
 
-# Install system dependencies
+# System deps
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    curl \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
+    git curl unzip zip nodejs npm \
+    && docker-php-ext-install pdo pdo_mysql
 
 # Enable Apache rewrite
 RUN a2enmod rewrite
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Copy source code
-COPY . /var/www/html
+# Copy source
+COPY . .
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install PHP deps
+RUN curl -sS https://getcomposer.org/installer | php \
+    && mv composer.phar /usr/local/bin/composer \
+    && composer install --no-dev --optimize-autoloader
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Install node deps & build Vite
+RUN npm install
+RUN npm run build
 
-# Create required Laravel directories
-RUN mkdir -p storage/framework/cache \
-    storage/framework/sessions \
-    storage/framework/views \
-    bootstrap/cache
+# Laravel permissions
+RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Set permissions
-RUN chown -R www-data:www-data storage bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache
-
-# Set Apache document root to public
-ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/*.conf \
-    && sed -ri 's!/var/www/!/var/www/html/public!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+# Apache config
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/*.conf
 
 EXPOSE 80
-
-CMD ["apache2-foreground"]
